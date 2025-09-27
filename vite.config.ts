@@ -10,12 +10,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://debrah-transpleural-bailey.ngrok-free.dev",
+        target: "http://localhost:5001",
         changeOrigin: true,
-        secure: true,
-        headers: {
-          "ngrok-skip-browser-warning": "true",
-        },
+        secure: false,
       },
     },
   },

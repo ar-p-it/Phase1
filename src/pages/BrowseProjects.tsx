@@ -21,6 +21,40 @@ interface Project {
   updatedAt: string;
 }
 
+// Backend response item (loose but typed to avoid 'any')
+type BackendProject = {
+  id?: string;
+  _id?: string;
+  title?: string;
+  name?: string;
+  metadata?: {
+    title?: string;
+    description?: string;
+    category?: string;
+    reasonHalted?: string;
+  };
+  description?: string;
+  category?: string;
+  languages?: string | string[];
+  originalRepoUrl?: string;
+  repoUrl?: string;
+  s3ObjectUrl?: string;
+  s3Url?: string;
+  projectFile?: { s3Url?: string };
+  reasonHalted?: string;
+  reason?: string;
+  aiSummary?: string;
+  summary?: string;
+  report?: { summary?: string };
+  links?: { documentation?: string; demo?: string };
+  documentation?: string;
+  demo?: string;
+  collaboratorEmails?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  modifiedAt?: string;
+};
+
 const BrowseProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
@@ -54,16 +88,56 @@ const BrowseProjects = () => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await fetch("/api/projects/list", {
+        const response = await fetch("https://debrah-transpleural-bailey.ngrok-free.dev/api/projects", {
           method: "GET",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+                "ngrok-skip-browser-warning": "true",
+                Accept: "application/json",
+          }
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        const list: Project[] = Array.isArray(data)
-          ? data
-          : data?.projects ?? [];
-        setProjects(Array.isArray(list) ? list : []);
+        const data: unknown = await response.json();
+
+        // Accept either an array or an object with a 'projects' array
+        const rawList: BackendProject[] = Array.isArray(data)
+          ? (data as BackendProject[])
+          : Array.isArray((data as { projects?: unknown })?.projects)
+          ? (data as { projects?: BackendProject[] }).projects ?? []
+          : [];
+
+        // Normalize to the UI's Project shape
+        const normalized: Project[] = rawList.map((p: BackendProject) => {
+          const id = p.id || p._id || "";
+          const languagesStr = Array.isArray(p.languages)
+            ? JSON.stringify(p.languages)
+            : typeof p.languages === "string"
+            ? p.languages
+            : JSON.stringify([]);
+          return {
+            id,
+            title: p.title || p.name || p.metadata?.title || "Untitled Project",
+            description: p.description || p.metadata?.description || "",
+            category: p.category || p.metadata?.category || "Other",
+            languages: languagesStr,
+            originalRepoUrl: p.originalRepoUrl || p.repoUrl || "",
+            s3ObjectUrl: p.s3ObjectUrl || p.s3Url || p.projectFile?.s3Url || "",
+            reasonHalted:
+              p.reasonHalted || p.reason || p.metadata?.reasonHalted || "Other",
+            aiSummary: p.aiSummary || p.summary || p.report?.summary,
+            links:
+              p.links ||
+              ({
+                documentation: p.documentation,
+                demo: p.demo,
+              } as Project["links"]),
+            collaboratorEmails: Array.isArray(p.collaboratorEmails)
+              ? p.collaboratorEmails
+              : [],
+            createdAt: p.createdAt || new Date().toISOString(),
+            updatedAt: p.updatedAt || p.modifiedAt || "",
+          };
+        });
+        setProjects(normalized);
       } catch (error) {
         console.error("Error fetching projects:", error);
         setProjects([]);
